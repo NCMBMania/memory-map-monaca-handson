@@ -1,0 +1,167 @@
+<template>
+  <div class="page" data-name="map">
+		<div class="navbar">
+			<div class="navbar-bg"></div>
+			<div class="navbar-inner sliding">
+				<div class="title">地図</div>
+			</div>
+		</div>
+		<div class="page-content">
+			<svg id="map"></svg>
+		</div>
+		<div class="sheet-modal sheet-modal-push" style="height: auto">
+			<div class="sheet-modal my-sheet">
+				<div class="toolbar">
+					<div class="toolbar-inner">
+						<div class="title">${ prefecture }</div>
+						<div class="right"><a class="link sheet-close" href="#">保存</a></div>
+					</div>
+				</div>
+				<div class="sheet-modal-inner list">
+					<form id="status">
+						<input type="hidden" name="prefId" value="${ prefId }" />
+						<ul>
+							${ status_values.map(value => $h`
+								<li>
+									<label class="item-radio item-content">
+										<input type="radio" name="status" value="${ value }" />
+										<i class="icon icon-radio"></i>
+										<div class="item-inner">
+											<div class="item-title">${ value }</div>
+										</div>
+									</label>
+								</li>
+							`)}
+						</ul>
+					</form>
+				</div>
+			</div>
+		</div>
+  </div>
+</template>
+<style>
+	.page-content {
+		text-align: center;
+	}
+	#map {
+		width: 90%;
+		height: 90vh;
+	}
+	.pref {
+    fill: #fff;
+    stroke: #000;
+	}
+	.sheet-modal {
+		height: auto;
+	}
+</style>
+<script>
+  export default (props, { $onMounted, $f7, $update, $on, $store }) => {
+		const status_values = ['なし', '通過', '降りた', '歩いた', '泊まった', '住んだ'];
+		const PrefectureStatus = ncmb.DataStore('PrefectureStatus');
+		let prefecture = '';
+		let prefId = '';
+		let pref = [];
+		let prefectureStatus = {};
+		const beforeIn = async (e) => {
+			prefectureStatus = await PrefectureStatus.fetch();
+			if (!prefectureStatus.objectId) prefectureStatus = new PrefectureStatus();
+			const status = prefectureStatus.status || {};
+			Object.keys(status).forEach(prefId => {
+				changeColor(prefId, status[prefId]);
+			});
+		};
+		$on('page:beforein', beforeIn);
+		$on('page:tabshow', beforeIn);
+
+		$onMounted(async () => {
+			await showMap();
+			$('.pref').on('click', (e) => {
+				prefId = $(e.target).attr('class').match(/pref([0-9]+)/)[1];
+				prefecture = pref[prefId];
+				$update();
+				sheet.open();
+			});
+			const sheet = app.sheet.create({el: '.my-sheet'});
+			sheet.on('open', function (sheet) {
+				const values = prefectureStatus.status || {};
+				const status = values[prefId] || 'なし';
+				$(`form#status [name="status"][value="${status}"]`).prop('checked', true);
+			});
+
+			sheet.on('close', async (sheet) => {
+				const prefId = $('form#status [name="prefId"]').val();
+				const value = $('form#status [name="status"]:checked').val();
+				const params = { [prefId]: value };
+				changeColor(prefId, value);
+				const status = {...prefectureStatus.status, ...params};
+				prefectureStatus.set('status', status);
+				const acl = new ncmb.Acl();
+				const user = ncmb.User.getCurrentUser();
+				acl.setUserReadAccess(user, true)
+					.setUserWriteAccess(user, true);
+				prefectureStatus.set('acl', acl);
+				if (prefectureStatus.objectId) {
+					await prefectureStatus.update();
+				} else {
+					await prefectureStatus.save();
+				}
+			});
+		});
+
+		const showMap = async () => {
+			const map = document.querySelector('#map');
+			const width = map.clientWidth;
+			const height = map.clientHeight;
+			const svg = d3.select("#map");
+			const projection = d3.geoMercator()
+				.center([136, 35.5])
+				.scale(1000)
+				.translate([width / 2, height / 2]);
+			const path = d3.geoPath()
+				.projection(projection);
+			const japan = await d3.json("../assets/japan.json");
+			pref = japan.objects.pref.geometries.map(d => d.properties.name_local);
+			$store.dispatch('setPrefectures', pref);
+			const topo = topojson.feature(japan, japan.objects.pref).features; // .geometries;
+			const view = svg.selectAll(".pref")
+				.data(topo)
+				.enter()
+				.append("path")
+				.attr("class", function(d) {
+						return "pref pref" + pref.indexOf(d.properties.name_local);
+				})
+				.attr("d", path);
+			function zoomed() {
+				const transform = d3.zoomTransform(this);
+				this.setAttribute("transform", transform);
+			}
+			const zoom = d3.zoom()
+				.scaleExtent([1, 5])
+				.translateExtent([
+					[-10, -10],
+					[width + 90, height + 100]
+				])
+				.on("zoom", zoomed);
+			svg.call(zoom);
+		}
+		
+		const changeColor = (prefId, status) => {
+			const dom = document.querySelector(`.pref${prefId}`);
+			dom.style.fill = getColor(status);
+		};
+
+		const getColor = (status) => {
+			switch (status) {
+				case 'なし': return '';
+				case '通過': return 'lightcyan';
+				case '降りた': return 'lightskyblue';
+				case '歩いた': return 'cornflowerblue';
+				case '泊まった': return 'blue';
+				case '住んだ': return 'navy';
+			}
+		}
+    return $render;
+  }
+
+</script>

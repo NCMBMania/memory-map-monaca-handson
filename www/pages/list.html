@@ -1,0 +1,44 @@
+<template>
+  <div class="page" data-name="map">
+		<div class="navbar">
+			<div class="navbar-bg"></div>
+			<div class="navbar-inner sliding">
+				<div class="title">リスト</div>
+			</div>
+		</div>
+		<div class="page-content">
+			<div class="data-table">
+				<table>
+					<thead>
+						<tr>
+							<th class="label-cell">都道府県</th>
+							<th class="label-cell">経験</th>
+						</tr>
+					</thead>
+					<tbody>
+						${ Object.keys(prefectures.value).map(prefId => $h`
+							<tr>
+								<td class="label-cell">${ prefectures.value[prefId] }</td>
+								<td class="label-cell">${ status[prefId] }</td>
+							</tr>
+						`)}
+					</tbody>
+				</table>
+			</div>
+		</div>
+  </div>
+</template>
+<script>
+  export default (props, { $f7, $update, $store, $on }) => {
+		const PrefectureStatus = ncmb.DataStore('PrefectureStatus');
+		let status = {};
+		const { prefectures } = $store.getters;
+		$on('page:tabshow', async (e) => {
+			const prefectureStatus = await PrefectureStatus.fetch();
+			status = prefectureStatus.status || {};
+			$update();
+		});
+    return $render;
+  }
+
+</script>
