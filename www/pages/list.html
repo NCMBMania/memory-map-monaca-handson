@@ -30,10 +30,12 @@
 </template>
 <script>
   export default (props, { $f7, $update, $store, $on }) => {
-		const PrefectureStatus = ncmb.DataStore('PrefectureStatus');
 		let status = {};
+		// 都道府県一覧
 		const { prefectures } = $store.getters;
 		$on('page:tabshow', async (e) => {
+			// 登録してあるデータを取得
+			const PrefectureStatus = ncmb.DataStore('PrefectureStatus');
 			const prefectureStatus = await PrefectureStatus.fetch();
 			status = prefectureStatus.status || {};
 			$update();

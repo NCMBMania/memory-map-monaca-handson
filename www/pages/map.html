@@ -7,8 +7,10 @@
 			</div>
 		</div>
 		<div class="page-content">
+			<!-- 地図を表示 -->
 			<svg id="map"></svg>
 		</div>
+		<!-- 都道府県選択時のモーダル -->
 		<div class="sheet-modal sheet-modal-push" style="height: auto">
 			<div class="sheet-modal my-sheet">
 				<div class="toolbar">
@@ -57,13 +59,21 @@
 </style>
 <script>
   export default (props, { $onMounted, $f7, $update, $on, $store }) => {
+		// 経験した内容一覧
 		const status_values = ['なし', '通過', '降りた', '歩いた', '泊まった', '住んだ'];
-		const PrefectureStatus = ncmb.DataStore('PrefectureStatus');
+		// 選択した都道府県
 		let prefecture = '';
+		// 選択した都道府県のID
 		let prefId = '';
+		// 都道府県の一覧
 		let pref = [];
+		// 都道府県毎の経験した内容
 		let prefectureStatus = {};
+
+		// 画面が表示される前、タブ表示の際に実行
 		const beforeIn = async (e) => {
+			// 登録したデータを取得
+			const PrefectureStatus = ncmb.DataStore('PrefectureStatus');
 			prefectureStatus = await PrefectureStatus.fetch();
 			if (!prefectureStatus.objectId) prefectureStatus = new PrefectureStatus();
 			const status = prefectureStatus.status || {};
@@ -71,36 +81,47 @@
 				changeColor(prefId, status[prefId]);
 			});
 		};
-		$on('page:beforein', beforeIn);
-		$on('page:tabshow', beforeIn);
+		$on('page:beforein', beforeIn); // 画面が表示される前に実行
+		$on('page:tabshow', beforeIn);  // タブ表示の際に実行
 
+		// 画面がマウントされる際に実行
 		$onMounted(async () => {
+			// 地図を表示
 			await showMap();
+			// 都道府県を選択した際のイベント
 			$('.pref').on('click', (e) => {
 				prefId = $(e.target).attr('class').match(/pref([0-9]+)/)[1];
 				prefecture = pref[prefId];
 				$update();
 				sheet.open();
 			});
+			// モーダルの準備
 			const sheet = app.sheet.create({el: '.my-sheet'});
+			// モーダルを開いた際のイベント
 			sheet.on('open', function (sheet) {
 				const values = prefectureStatus.status || {};
 				const status = values[prefId] || 'なし';
 				$(`form#status [name="status"][value="${status}"]`).prop('checked', true);
 			});
-
+			// モーダルを閉じた際のイベント
 			sheet.on('close', async (sheet) => {
+				// 選択されている都道府県を取得
 				const prefId = $('form#status [name="prefId"]').val();
 				const value = $('form#status [name="status"]:checked').val();
 				const params = { [prefId]: value };
 				changeColor(prefId, value);
+				// データをマージ
 				const status = {...prefectureStatus.status, ...params};
+				// 既存データに反映
 				prefectureStatus.set('status', status);
+				// アクセス権限を設定
 				const acl = new ncmb.Acl();
 				const user = ncmb.User.getCurrentUser();
-				acl.setUserReadAccess(user, true)
-					.setUserWriteAccess(user, true);
+				acl
+					.setUserReadAccess(user, true)   // 自分だけ読み込み可能
+					.setUserWriteAccess(user, true); // 自分だけ書き込み可能
 				prefectureStatus.set('acl', acl);
+				// データを保存・更新
 				if (prefectureStatus.objectId) {
 					await prefectureStatus.update();
 				} else {
@@ -109,6 +130,7 @@
 			});
 		});
 
+		// 地図を表示する処理
 		const showMap = async () => {
 			const map = document.querySelector('#map');
 			const width = map.clientWidth;
@@ -146,11 +168,12 @@
 			svg.call(zoom);
 		}
 		
+		// 都道府県の色を変更する処理
 		const changeColor = (prefId, status) => {
 			const dom = document.querySelector(`.pref${prefId}`);
 			dom.style.fill = getColor(status);
 		};
-
+		// 色名を返す処理
 		const getColor = (status) => {
 			switch (status) {
 				case 'なし': return '';
